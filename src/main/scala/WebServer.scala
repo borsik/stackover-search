@@ -5,17 +5,18 @@ import akka.stream.{ActorMaterializer, ActorMaterializerSettings, Supervision}
 import scala.io.StdIn
 import akka.http.scaladsl.server.Directives
 
+import scala.concurrent.ExecutionContextExecutor
+
 object WebServer extends Directives with JsonSupport {
 
   def main(args: Array[String]): Unit = {
-    val decider: Supervision.Decider = {
-      case _ ⇒ Supervision.Resume
-    }
+    val decider: Supervision.Decider = _ ⇒ Supervision.Resume
 
-    implicit val system = ActorSystem("stackover-search")
-    implicit val materializer =
-      ActorMaterializer(ActorMaterializerSettings(system).withSupervisionStrategy(decider))
-    implicit val executionContext = system.dispatcher
+    implicit val system: ActorSystem = ActorSystem("stackover-search")
+    implicit val materializer: ActorMaterializer =
+      ActorMaterializer(
+        ActorMaterializerSettings(system).withSupervisionStrategy(decider))
+    implicit val executionContext: ExecutionContextExecutor = system.dispatcher
 
     val api = new Api()
 
