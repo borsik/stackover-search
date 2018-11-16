@@ -4,12 +4,14 @@ import akka.stream.{ActorMaterializer, ActorMaterializerSettings, Supervision}
 
 import scala.io.StdIn
 import akka.http.scaladsl.server.Directives
+import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.ExecutionContextExecutor
 
 object WebServer extends Directives with JsonSupport {
 
   def main(args: Array[String]): Unit = {
+    val parallelism = ConfigFactory.load().getInt("akka.stream.parallelism")
     val decider: Supervision.Decider = _ ⇒ Supervision.Resume
 
     implicit val system: ActorSystem = ActorSystem("stackover-search")
@@ -24,7 +26,7 @@ object WebServer extends Directives with JsonSupport {
       path("search") {
         get {
           parameters('tag.*) { tags =>
-            onSuccess(api.multiRequest(tags.toSeq)) { stats =>
+            onSuccess(api.multiRequest(tags.toSeq.distinct, parallelism)) { stats =>
               if (stats.isEmpty) complete("Nothing found")
               else complete(stats)
             }
@@ -32,9 +34,9 @@ object WebServer extends Directives with JsonSupport {
         }
       }
 
-    val bindingFuture = Http().bindAndHandle(route, "localhost", 8080)
+    val bindingFuture = Http().bindAndHandle(route, "0.0.0.0")
 
-    println(s"Server online at http://localhost:8080/\nPress RETURN to stop...")
+    println(s"Server online at http://localhost:8080 (default port)/\nPress RETURN to stop...")
     StdIn.readLine() // let it run until user presses return
     bindingFuture
       .flatMap(_.unbind()) // trigger unbinding from the port

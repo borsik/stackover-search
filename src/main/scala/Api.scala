@@ -15,8 +15,7 @@ import akka.http.scaladsl.settings.{ClientConnectionSettings, ConnectionPoolSett
 import scala.util.Try
 
 class Api(implicit actorSystem: ActorSystem,
-          actorMaterializer: ActorMaterializer)
-    extends JsonSupport {
+          actorMaterializer: ActorMaterializer) extends JsonSupport {
   implicit val executionContext: ExecutionContextExecutor = actorSystem.dispatcher
 
   def singleRequest(tag: String): Future[Map[String, Statistics]] = {
