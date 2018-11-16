@@ -18,7 +18,7 @@ class Api(implicit actorSystem: ActorSystem,
           actorMaterializer: ActorMaterializer) extends JsonSupport {
   implicit val executionContext: ExecutionContextExecutor = actorSystem.dispatcher
 
-  def singleRequest(tag: String): Future[Map[String, Statistics]] = {
+  def singleRequest(tag: String): Future[(String, Statistics)] = {
     val uri =
       s"https://api.stackexchange.com/2.2/search?pagesize=100&order=desc&sort=creation&tagged=$tag&site=stackoverflow"
 
@@ -42,16 +42,16 @@ class Api(implicit actorSystem: ActorSystem,
         result <- Unmarshal(decompressedBytes).to[ApiResponse]
       } yield result)
 
-    val tagPairs: Future[Seq[(String, Boolean)]] =
-      apiResponse.map(
-        _.items.flatMap(item => item.tags.map(_ -> item.is_answered)))
+    val tagPairs = apiResponse.map(_.items.map(item => tag -> item.is_answered))
 
-    tagPairs.map(_.groupBy(_._1).map {
-      case (apiTag, list) =>
-        val total = list.size
-        val answered = list.count(_._2)
-        apiTag -> Statistics(total, answered)
-    })
+    tagPairs.map(tagPair =>
+      if (tagPair.isEmpty) tag -> Statistics(0, 0)
+      else {
+        val total = tagPair.size
+        val answered = tagPair.count(_._2)
+        tag -> Statistics(total, answered)
+      }
+    )
   }
 
   def multiRequest(tags: Seq[String],
@@ -59,13 +59,6 @@ class Api(implicit actorSystem: ActorSystem,
     val source: Source[String, NotUsed] = Source(tags.toList)
     source
       .mapAsync(parallelism)(tag => singleRequest(tag))
-      .runFold(Map[String, Statistics]())((a, b) =>
-        (a.toSeq ++ b.toSeq).groupBy(_._1).map {
-          case (tag, list) =>
-            tag -> list
-              .map(_._2)
-              .reduce((a, b) =>
-                Statistics(a.total + b.total, a.answered + b.answered))
-      })
+      .runFold(Map[String, Statistics]())((acc, next) => acc + next)
   }
 }
